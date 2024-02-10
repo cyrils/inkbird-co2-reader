@@ -8,10 +8,10 @@ wait_time = 120 # I haven't yet figured out how to make ad-hoc read
 def notification_callback(sender, data):
     sign = data[4]
     temperature = data[5] << 8 | data[6]
-    print ("Temperature:", temperature if sign == 0 else -temperature)
-    print ("CO2:", data[9] << 8 | data[10])
-    print ("Humidity:", data[7] << 8 | data[8])
-    print ("Air Pressure:", data[11] << 8 | data[12])
+    print ("Temperature:", temperature if sign == 0 else -temperature) # °C
+    print ("CO2:", data[9] << 8 | data[10]) # ppm
+    print ("Humidity:", data[7] << 8 | data[8]) # %
+    print ("Air Pressure:", data[11] << 8 | data[12]) # hPa
 
 async def main():
     # Connect to the BLE device
