@@ -17,7 +17,6 @@ class InkBird:
         self.client = None
 
     async def connect(self):
-        inkbird = None
         logging.info('Searching for device..')
         inkbird = await BleakScanner.find_device_by_name(self.config['device']['alias'])        
 
