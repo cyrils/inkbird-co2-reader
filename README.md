@@ -11,3 +11,12 @@ pip3 install bleak
 
 python3 inkbird-co2-reader/reader.py
 ```
+
+## Sample output
+
+```text
+INFO:root:Searching for device..
+INFO:root:Found device <device-id>: Ink@IAM-T1
+INFO:root:Client connection: True
+INFO:root:{'temperature': 20.1, 'co2': 643, 'humidity': 58.0, 'atmospheric_pressure': 1016}
+```

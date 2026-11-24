@@ -9,16 +9,17 @@ import paho.mqtt.publish as publish
 from bleak import BleakClient, BleakScanner
 
 characteristic = "0000ffe4-0000-1000-8000-00805f9b34fb"
-wait_time = 120 # I haven't yet figured out how to make ad-hoc read
+command_characteristic = "0000ffe9-0000-1000-8000-00805f9b34fb"
+request_measurement = bytes.fromhex("55 aa 09 06 01 0f")
+wait_time = 120
 
 class InkBird:
     def __init__(self, config):
         self.config: configparser.ConfigParser = config
-        self.client = None
 
     async def connect(self):
         logging.info('Searching for device..')
-        inkbird = await BleakScanner.find_device_by_name(self.config['device']['alias'])        
+        inkbird = await BleakScanner.find_device_by_name(self.config['device']['alias'])
 
         if not inkbird:
             return logging.error('Device not found!')
@@ -26,13 +27,24 @@ class InkBird:
             logging.info(f'Found device {inkbird}')
 
         async with BleakClient(inkbird) as client:
-            self.client = client
             logging.info(f"Client connection: {client.is_connected}")
-            await client.start_notify(characteristic, self.notification_callback)
-            await asyncio.sleep(wait_time)
-            await self.disconnect()
+            measurement = asyncio.get_running_loop().create_future()
 
-    async def notification_callback(self, sender, data):
+            def receive_measurement(_sender, data):
+                if not measurement.done() and len(data) >= 16 and data.startswith(b"\x55\xaa\x01"):
+                    measurement.set_result(bytes(data))
+
+            await client.start_notify(characteristic, receive_measurement)
+            await client.write_gatt_char(command_characteristic, request_measurement, response=True)
+            try:
+                data = await asyncio.wait_for(measurement, timeout=wait_time)
+            except asyncio.TimeoutError:
+                logging.error("No measurement received within %s seconds", wait_time)
+                return
+
+        self.publish_measurement(data)
+
+    def publish_measurement(self, data):
         sign = data[4]
         temperature = data[5] << 8 | data[6]
         json_data = {
@@ -42,8 +54,8 @@ class InkBird:
             'atmospheric_pressure': data[11] << 8 | data[12]
         }
         logging.info(json_data)
-        self.publish_mqtt(json_data)
-        await self.disconnect()
+        if self.config.getboolean('mqtt', 'enabled', fallback=True):
+            self.publish_mqtt(json_data)
 
     def publish_mqtt(self, json_data):
         user = self.config['mqtt']['user']
@@ -55,13 +67,6 @@ class InkBird:
             hostname=self.config['mqtt']['server'], port=self.config['mqtt'].getint('port'),
             auth=auth, client_id="inkbird-reader"
         )
-
-    async def disconnect(self):
-        if self.client and self.client.is_connected:
-            await self.client.stop_notify(characteristic)
-            await self.client.disconnect()
-            os._exit(os.EX_OK)
-
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
